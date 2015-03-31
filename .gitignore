@@ -1,0 +1,7 @@
+*.TPU
+TPX.DSK
+TPX.PSM
+*.bak
+*.EXE
+*.exe
+*~

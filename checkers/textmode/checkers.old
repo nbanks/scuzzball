@@ -1,0 +1,334 @@
+ Uses Crt;
+ Const Black=0;
+       Red=1;
+       BlackKing=2;
+       RedKing=3;
+       Blank=$FF;
+
+       CursorColour=2;
+       GoodMoveColour=1;
+ Type CharColour=
+      Record
+        Ch:Char;
+        Co:Byte;
+      End;
+      BoardType=Array[0..63] of Byte;
+      MoveType=Array[0..8] of Byte;
+        {It is impossible to have more than four possible moves.}
+ var Board:BoardType;
+     Screen:Array[0..24,0..79] of CharColour Absolute $B800:$0000;
+     CurMove:Byte;
+ Procedure DrawBoard;
+  Const Piece:Array[0..2,0..5] of Char=
+              ('  ÜÜ  ',
+               ' ÞÛÛÝ ',
+               '  ßß  ');
+  var X,Y,SubX,SubY:Byte;
+      Colour:Byte;
+ Begin
+   For Y:=0 to 7 do
+     For X:=0 to 7 do
+     Begin
+       If (Y Xor X) And 1=0 then {The colour is red.}
+         Colour:=$44 {Red on Red}
+       Else
+         Case Board[Y SHL 3+X] of
+           Black:Colour:=$07; {Grey on Black}
+           Red:Colour:=$04; {Red on Black}
+           BlackKing:Colour:=$0F; {White on Black}
+           RedKing:Colour:=$0C; {Bright red on Black}
+         Else
+           Colour:=$00;
+         End;
+       For SubY:=0 to 2 do
+         For SubX:=0 to 5 do
+           With Screen[Y*3+SubY,X*6+SubX+16] do
+           Begin
+             Co:=Colour;
+             Ch:=Piece[SubY,SubX];
+           End;
+     End;
+ End;
+ Procedure NewGame;
+  var X,Y:Byte;
+ Begin
+   FillChar(Screen,SizeOf(Screen),$11);
+   FillChar(Board,SizeOf(Board),Blank);
+   For Y:=0 to 2 do
+     For X:=0 to 3 do
+       Board[Y SHL 3+X SHL 1+Ord(Y And 1=0)]:=Black;
+   For Y:=5 to 7 do
+     For X:=0 to 3 do
+       Board[Y SHL 3+X SHL 1+Ord(Y And 1=0)]:=Red;
+
+   Board[17]:=Black;
+   CurMove:=Black;
+   DrawBoard;
+   GotoXY(80,25);
+ End;
+ Procedure FindGoodMoves(Square:Byte; Var Moves:MoveType; Var Jump:Boolean);
+  {This returns up to four possible moves for a square.  This is given in the
+   form of a $FF terminated string.  If a jump is available, Jump is set.}
+  var CurPos,CurGuy,MoveNum:Byte;
+      NextMoves:MoveType;
+      NextJump:Boolean;
+ Begin
+   MoveNum:=0;
+   Jump:=False;
+   CurGuy:=Board[Square];
+   Moves[0]:=$FF;
+   If CurGuy=Blank then Exit;
+   If CurGuy in[Black,BlackKing,RedKing] then
+   Begin
+     If (Square>55) and (CurGuy=Black) then
+     Begin
+       Moves[0]:=$FF;
+       Exit;
+     End;
+     If Square and $7<>0 then
+     Begin
+       CurPos:=Square+7;
+       If Board[CurPos]=Blank then
+       Begin
+         Moves[MoveNum]:=CurPos;
+         Inc(MoveNum);
+       End Else
+         If Board[CurPos] and 1<> CurGuy and 1 then {Opposite side...}
+         Begin
+           CurPos:=CurPos+7;
+           If (CurPos and $7<>7) and (Board[CurPos]=Blank) then
+           Begin
+             Board[CurPos]:=CurGuy; {Temporary...}
+             FindGoodMoves(CurPos,NextMoves,NextJump);
+             Board[CurPos]:=Blank;
+             If NextJump then
+             Begin
+               CurPos:=0;
+               Repeat
+                 Moves[MoveNum]:=NextMoves[CurPos];
+                 Inc(CurPos);
+                 Inc(MoveNum);
+               Until NextMoves[CurPos]=$FF;
+             End Else
+             Begin
+               Moves[MoveNum]:=CurPos;
+               Inc(MoveNum);
+             End;
+             Jump:=True;
+           End;
+       End;
+     End;
+     If Square and $7<>7 then
+     Begin
+       CurPos:=Square+9;
+       If Board[CurPos]=Blank then
+         If Not Jump then
+         Begin
+           Moves[MoveNum]:=CurPos;
+           Inc(MoveNum);
+         End Else
+       Else
+         If Board[CurPos] and 1<>CurGuy and 1 then {Opposite side.}
+         Begin
+           CurPos:=CurPos+9;
+           If (CurPos and $7<>0) and (Board[CurPos]=Blank) then
+           Begin
+             If Not Jump then MoveNum:=0;
+             Board[CurPos]:=CurGuy; {Temporary...}
+             FindGoodMoves(CurPos,NextMoves,NextJump);
+             Board[CurPos]:=Blank;
+             If NextJump then
+             Begin
+               CurPos:=0;
+               Repeat
+                 Moves[MoveNum]:=NextMoves[CurPos];
+                 Inc(CurPos);
+                 Inc(MoveNum);
+               Until NextMoves[CurPos]=$FF;
+             End Else
+             Begin
+               Moves[MoveNum]:=CurPos;
+               Inc(MoveNum);
+             End;
+             Jump:=True;
+           End;
+         End;
+     End;
+     Moves[MoveNum]:=$FF;
+   End;
+   If CurGuy in[Red,RedKing,BlackKing] then
+   Begin
+     If (Square<8) And (CurGuy=Red) then
+     Begin
+       Moves[0]:=$FF;
+       Exit;
+     End;
+     If Square and $7<>7 then
+     Begin
+       CurPos:=Square-7;
+       If Board[CurPos]=Blank then
+         If Not Jump then
+         Begin
+           Moves[MoveNum]:=CurPos;
+           Inc(MoveNum);
+         End Else
+       Else
+         If Board[CurPos] and 1<>CurGuy and 1 then
+         Begin
+           CurPos:=CurPos-7;
+           If (CurPos and $7<>0) and (Board[CurPos]=Blank) then
+           Begin
+             If Not Jump then MoveNum:=0;
+             Board[CurPos]:=CurGuy; {Temporary...}
+             FindGoodMoves(CurPos,NextMoves,NextJump);
+             Board[CurPos]:=Blank;
+             If NextJump then
+             Begin
+               CurPos:=0;
+               Repeat
+                 Moves[MoveNum]:=NextMoves[CurPos];
+                 Inc(CurPos);
+                 Inc(MoveNum);
+               Until NextMoves[CurPos]=$FF;
+             End Else
+             Begin
+               Moves[MoveNum]:=CurPos;
+               Inc(MoveNum);
+             End;
+             Jump:=True;
+           End;
+         End;
+     End;
+     If Square and $7<>0 then
+     Begin
+       CurPos:=Square-9;
+       If Board[CurPos]=Blank then
+         If Not Jump then
+         Begin
+           Moves[MoveNum]:=CurPos;
+           Inc(MoveNum);
+         End Else
+       Else
+         If Board[CurPos] and 1<>CurGuy and 1 then
+         Begin
+           CurPos:=CurPos-9;
+           If (CurPos and $7<>7) and (Board[CurPos]=Blank) then
+           Begin
+             If Not Jump then MoveNum:=0;
+             Board[CurPos]:=CurGuy; {Temporary...}
+             FindGoodMoves(CurPos,NextMoves,NextJump);
+             Board[CurPos]:=Blank;
+             If NextJump then
+             Begin
+               CurPos:=0;
+               Repeat
+                 Moves[MoveNum]:=NextMoves[CurPos];
+                 Inc(CurPos);
+                 Inc(MoveNum);
+               Until NextMoves[CurPos]=$FF;
+             End Else
+             Begin
+               Moves[MoveNum]:=CurPos;
+               Inc(MoveNum);
+             End;
+             Jump:=True;
+           End;
+         End;
+     End;
+     Moves[MoveNum]:=$FF;
+   End;
+ End;
+ Procedure GetMove;
+  Procedure ChangeColour(X,Y,Colour:Byte);
+   var CurX,CurY:Byte;
+  Begin
+    X:=X*6+16;
+    Y:=Y*3;
+    For CurY:=Y to Y+2 do
+      For CurX:=X to X+5 do
+        Screen[CurY,CurX].Co:=Colour;
+  End;
+  var OldColour,OldX,OldY:Byte;
+  Procedure SelectSquare(X,Y:Byte);
+   {X,Y is from (0..7,0..7)}
+   var NewColour:Byte;
+  Begin
+    ChangeColour(OldX,OldY,OldColour);
+    OldColour:=Screen[Y*3,X*6+16].Co;
+    If OldColour SHR 4=OldColour And $F then
+      NewColour:=(CursorColour SHL 4) or CursorColour
+    Else NewColour:=(OldColour and $0F) or (CursorColour SHL 4);
+    ChangeColour(X,Y,NewColour);
+    OldY:=Y;
+    OldX:=X;
+  End;
+  var X,Y,Pos:Byte;
+      Moves:MoveType;
+      Jump:Boolean;
+ Begin
+   X:=4;
+   Y:=4;
+   OldX:=8;
+   OldY:=0;
+   OldColour:=$11;
+   Repeat
+     SelectSquare(X,Y);
+     Case ReadKey of
+       #0:Case ReadKey of
+            'H':Y:=(Y-1) and $07;
+            'P':Y:=(Y+1) and $07;
+            'K':X:=(X-1) and $07;
+            'M':X:=(X+1) and $07;
+          End;
+       ' ',#13:
+       Begin
+         DrawBoard;
+         FindGoodMoves((Y SHL 3) or X,Moves,Jump);
+         For Pos:=0 to 3 do
+         Begin
+           CurMove:=Moves[Pos];
+           If CurMove=$FF then Break;
+           ChangeColour(CurMove And 7,CurMove SHR 3,
+             GoodMoveColour SHL 4+GoodMoveColour);
+           GotoXY(Pos*4+16,25);
+           Write(Moves[Pos]);
+         End;
+       End;
+       'W':
+       Begin
+         Board[Y SHL 3+X]:=BlackKing;
+         SelectSquare(8,0);
+         DrawBoard;
+       End;
+       'w':
+       Begin
+         Board[Y SHL 3+X]:=Black;
+         SelectSquare(8,0);
+         DrawBoard;
+       End;
+       'R':
+       Begin
+         Board[Y SHL 3+X]:=RedKing;
+         SelectSquare(8,0);
+         DrawBoard;
+       End;
+       'r':
+       Begin
+         Board[Y SHL 3+X]:=Red;
+         SelectSquare(8,0);
+         DrawBoard;
+       End;
+       'E','e':
+       Begin
+         Board[Y SHL 3+X]:=Blank;
+         SelectSquare(8,0);
+         DrawBoard;
+       End;
+       #27:Break;
+     End;
+   Until False;
+ End;
+Begin
+  NewGame;
+  GetMove;
+End.
