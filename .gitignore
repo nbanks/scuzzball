@@ -2,6 +2,7 @@
 TPX.DSK
 TPX.PSM
 *.bak
+*.BAK
 *.EXE
 *.exe
 *~

@@ -13,7 +13,7 @@
        CursorColour=2;
        SelectedColour=5;
        GoodMoveColour=1;
-       GfxBackground=1; {0 for text, 1 for mono text, other for cool stuff.}
+       GfxBackground=3; {0 for text, 1 for mono text, other for cool stuff.}
 
        BoardType=2; {0=Normal, 1=Marble, 2=Wood}
        PieceType=1; {0=Normal, 1=Marble, 2=Wood}
@@ -1661,6 +1661,10 @@
        Mov AX,13h
        Int 10h
      End;
+     Port[$3C8]:=255; {Start a palette change at 255}
+     Port[$3C9]:=0; {TTTTTTTTTTTTEEEEEEEEEEEEMMMMMMMMMMMMMPPPPPPPPPPPPPP}
+     Port[$3C9]:=0; {This just ensures that colour 255 is actually black.}
+     Port[$3C9]:=0; {Eventually it will be filled with the background.}
      GetMems;
      CalculateCircles;
      If BoardType=PieceType then Extra:=16
@@ -2496,6 +2500,21 @@
     Mov AX,2h {Hide Mouse}
     Int 33h
   End;
+  Function ButtonPressed:Boolean; Assembler;
+   {This returns true if a button is pressed and the driver's installed.
+    It doesn't change the position data.}
+  Asm
+    CMP MouseFound,False {Check for driver instalation}
+    JE @False
+    Mov AX,0003h {Get the status.}
+    Int 33h
+    Mov AL,True
+    CMP BX,0
+    JNE @True
+  @False:
+    Mov AL,False
+  @True:
+  End;
   Function CheckMouse:Boolean;
    Var X,Y:Word;
        Butt:Byte;
@@ -2566,7 +2585,7 @@
     PutMouse(160,100);
   End;
   Var OldX,OldY:Byte;
-      MouseMoved,MouseDidMove,Paused:Boolean;
+      MouseMoved,MouseDidMove,Paused,GotPlayer:Boolean;
  Begin
    X:=4;
    Y:=4;
@@ -2579,9 +2598,11 @@
    FillChar(Selections,SizeOf(Selections),0);
    MouseMoved:=False;
    ResetMouse;
+   GotPlayer:=(RedThinkingPower=0) or (BlackThinkingPower=0);
    Repeat
      WritePlayer;
      If Not Paused and (Mem[$40:$17] and 3=0) and {If shift isn't pressed}
+       {(Not ButtonPressed) and {A mouse button is not pressed}
        (((CurMove=Red) and (RedThinkingPower>0)) or {& it's a computer's turn}
        ((CurMove=Black) and (BlackThinkingPower>0))) then
      Begin
@@ -2597,12 +2618,17 @@
        If Selections[Pos]<>0 then
          PutCursor(Pos and 7,Pos SHR 3,Selections[Pos]);
      PutCursor(X,Y,Selections[Y SHL 3 OR X] or CursorColour);
-     If (RedThinkingPower=0) or (BlackThinkingPower=0) or{There's a player}
-       KeyPressed then
+     If GotPlayer or KeyPressed{ or ButtonPressed }then
      Begin
        If MouseMoved then ShowMouse;
        MouseDidMove:=MouseMoved;
-       Repeat
+       If ButtonPressed then
+       Begin
+         OldMouseX:=MouseX;
+         OldMouseY:=MouseY;
+         CheckMouse;
+       End;
+       Repeat {Only check the mouse if we aren't here cuz of the mouse.}
          MouseMoved:=CheckMouse;
        Until Keypressed or MouseMoved;
        If MouseDidMove then HideMouse;
@@ -2618,13 +2644,14 @@
                         Quadrant:=Round(YAxis/(Pi/4)) and 7;
                         Redraw:=True;
                       End Else
-                      Begin
-                        PutCursor(X,Y,Selections[Y SHL 3 or X]);
-                        If Quadrant in[7,0..1] then X:=(X+1) and 7;
-                        If (Quadrant in[1..3]) and GoodSpot then Y:=(Y-1) and 7;
-                        If Quadrant in[3..5] then X:=(X-1) and 7;
-                        If (Quadrant in[5..7]) and GoodSpot then Y:=(Y+1) and 7;
-                      End;
+                        If GotPlayer then
+                        Begin
+                          PutCursor(X,Y,Selections[Y SHL 3 or X]);
+                          If Quadrant in[7,0..1] then X:=(X+1) and 7;
+                          If (Quadrant in[1..3]) and GoodSpot then Y:=(Y-1) and 7;
+                          If Quadrant in[3..5] then X:=(X-1) and 7;
+                          If (Quadrant in[5..7]) and GoodSpot then Y:=(Y+1) and 7;
+                        End;
                   'K':If Mem[$40:$17] and 3<>0 then {Left+Shift is pressed.}
                       Begin
                         YAxis:=YAxis-Pi/32;
@@ -2632,13 +2659,14 @@
                         Quadrant:=Round(YAxis/(Pi/4)) and 7;
                         Redraw:=True;
                       End Else
-                      Begin
-                        PutCursor(X,Y,Selections[Y SHL 3 or X]);
-                        If Quadrant in[7,0..1] then X:=(X-1) and 7;
-                        If (Quadrant in[1..3]) and GoodSpot then Y:=(Y+1) and 7;
-                        If Quadrant in[3..5] then X:=(X+1) and 7;
-                        If (Quadrant in[5..7]) and GoodSpot then Y:=(Y-1) and 7;
-                      End;
+                        If GotPlayer then
+                        Begin
+                          PutCursor(X,Y,Selections[Y SHL 3 or X]);
+                          If Quadrant in[7,0..1] then X:=(X-1) and 7;
+                          If (Quadrant in[1..3]) and GoodSpot then Y:=(Y+1) and 7;
+                          If Quadrant in[3..5] then X:=(X+1) and 7;
+                          If (Quadrant in[5..7]) and GoodSpot then Y:=(Y-1) and 7;
+                        End;
                   'H':If Mem[$40:$17] and 3<>0 then {Up+Shift is pressed.}
                         If XAxis<Pi/2-0.01 then
                         Begin
@@ -2646,13 +2674,14 @@
                           Redraw:=True;
                         End Else
                       Else
-                      Begin
-                        PutCursor(X,Y,Selections[Y SHL 3 or X]);
-                        If Quadrant in[7,0..1] then Y:=(Y-1) and 7;
-                        If (Quadrant in[1..3]) and GoodSpot then X:=(X-1) and 7;
-                        If Quadrant in[3..5] then Y:=(Y+1) and 7;
-                        If (Quadrant in[5..7]) and GoodSpot then X:=(X+1) and 7;
-                      End;
+                        If GotPlayer then
+                        Begin
+                          PutCursor(X,Y,Selections[Y SHL 3 or X]);
+                          If Quadrant in[7,0..1] then Y:=(Y-1) and 7;
+                          If (Quadrant in[1..3]) and GoodSpot then X:=(X-1) and 7;
+                          If Quadrant in[3..5] then Y:=(Y+1) and 7;
+                          If (Quadrant in[5..7]) and GoodSpot then X:=(X+1) and 7;
+                        End;
                   'P':If Mem[$40:$17] and 3<>0 then {Down+Shift is pressed.}
                         If XAxis>Pi/16+0.01 then
                         Begin
@@ -2660,13 +2689,14 @@
                           Redraw:=True;
                         End Else
                       Else
-                      Begin
-                        PutCursor(X,Y,Selections[Y SHL 3 or X]);
-                        If Quadrant in[7,0..1] then Y:=(Y+1) and 7;
-                        If (Quadrant in[1..3]) and GoodSpot then X:=(X+1) and 7;
-                        If Quadrant in[3..5] then Y:=(Y-1) and 7;
-                        If (Quadrant in[5..7]) and GoodSpot then X:=(X-1) and 7;
-                      End;
+                        If GotPlayer then
+                        Begin
+                          PutCursor(X,Y,Selections[Y SHL 3 or X]);
+                          If Quadrant in[7,0..1] then Y:=(Y+1) and 7;
+                          If (Quadrant in[1..3]) and GoodSpot then X:=(X+1) and 7;
+                          If Quadrant in[3..5] then Y:=(Y-1) and 7;
+                          If (Quadrant in[5..7]) and GoodSpot then X:=(X-1) and 7;
+                        End;
                 End;
               End;
            '-','_':Begin
@@ -2678,79 +2708,80 @@
                      Redraw:=True;
                    End;
            ' ',#13:
-           Begin
-             If CurSelected=$FF then SelectGuy
-             Else
+             If GotPlayer then
              Begin
-               NewSpot:=Y SHL 3+X;
-               For Pos:=0 to 4 do
+               If CurSelected=$FF then SelectGuy
+               Else
                Begin
-                 Temp:=Moves[Pos];
-                 If Temp=$FF then
+                 NewSpot:=Y SHL 3+X;
+                 For Pos:=0 to 4 do
                  Begin
-                   If Not DoubleJump then
+                   Temp:=Moves[Pos];
+                   If Temp=$FF then
                    Begin
-                     If Board[Y SHL 3 or X] and 5=CurMove then SelectGuy;
-                   End Else JumpMessage:=True;
-                   Break;
-                 End;
-                 If Temp=NewSpot then
-                 Begin
-                   If Not DoubleJump then
-                     Write(GameRecord,NormalBoard(CurSelected));
-                   Write(GameRecord,'-',NormalBoard(NewSpot));
-                   ResetCursor;
-                   MovePiece(CurSelected and 7,CurSelected SHR 3,
-                     NewSpot and 7,NewSpot SHR 3,Jump);
-                   Board[NewSpot]:=Board[CurSelected];
-                   PieceMap[NewSpot]:=PieceMap[CurSelected]; {Update the indexes}
-                   If CurMove=Red then
-                     RedPieces[PieceMap[CurSelected]]:=NewSpot
-                   Else
-                     BlackPieces[PieceMap[CurSelected]]:=NewSpot;
-                   Board[CurSelected]:=Blank;
-                   If Jump then
+                     If Not DoubleJump then
+                     Begin
+                       If Board[Y SHL 3 or X] and 5=CurMove then SelectGuy;
+                     End Else JumpMessage:=True;
+                     Break;
+                   End;
+                   If Temp=NewSpot then
                    Begin
-                     Temp:=(NewSpot+CurSelected) SHR 1;
-                     Board[Temp]:=Blank;
+                     If Not DoubleJump then
+                       Write(GameRecord,NormalBoard(CurSelected));
+                     Write(GameRecord,'-',NormalBoard(NewSpot));
+                     ResetCursor;
+                     MovePiece(CurSelected and 7,CurSelected SHR 3,
+                       NewSpot and 7,NewSpot SHR 3,Jump);
+                     Board[NewSpot]:=Board[CurSelected];
+                     PieceMap[NewSpot]:=PieceMap[CurSelected]; {Update the indexes}
                      If CurMove=Red then
+                       RedPieces[PieceMap[CurSelected]]:=NewSpot
+                     Else
+                       BlackPieces[PieceMap[CurSelected]]:=NewSpot;
+                     Board[CurSelected]:=Blank;
+                     If Jump then
                      Begin
-                       BlackPieces[PieceMap[Temp]]:=BlackPieces[LastBlack];
-                       PieceMap[BlackPieces[LastBlack]]:=PieceMap[Temp];
-                       Dec(LastBlack);
-                     End Else
-                     Begin
-                       RedPieces[PieceMap[Temp]]:=RedPieces[LastRed];
-                       PieceMap[RedPieces[LastRed]]:=PieceMap[Temp];
-                       Dec(LastRed);
-                     End;
-                     FindValidMoves(NewSpot,Moves,DoubleJump);
-                     If DoubleJump then
-                     Begin
-                       CurSelected:=NewSpot;
-                       Selections[CurSelected]:=SelectedColour;
-                       For Pos:=0 to 3 do
+                       Temp:=(NewSpot+CurSelected) SHR 1;
+                       Board[Temp]:=Blank;
+                       If CurMove=Red then
                        Begin
-                         Temp:=Moves[Pos];
-                         If Temp=$FF then Break;
-                         PutCursor(Temp And 7,Temp SHR 3,GoodMoveColour);
-                         Selections[Temp]:=GoodMoveColour;
+                         BlackPieces[PieceMap[Temp]]:=BlackPieces[LastBlack];
+                         PieceMap[BlackPieces[LastBlack]]:=PieceMap[Temp];
+                         Dec(LastBlack);
+                       End Else
+                       Begin
+                         RedPieces[PieceMap[Temp]]:=RedPieces[LastRed];
+                         PieceMap[RedPieces[LastRed]]:=PieceMap[Temp];
+                         Dec(LastRed);
                        End;
-                       Break;
-                     End;
-                   End Else CurSelected:=$FF;
-                   If (NewSpot<8) and (Board[NewSpot]=Red) then
-                     Board[NewSpot]:=RedKing;
-                   If (NewSpot>55) and (Board[NewSpot]=Black) then
-                     Board[NewSpot]:=BlackKing;
-                   CurMove:=CurMove Xor 1;
-                   Inc(MoveNumber);
-                   FindMoves;
-                   WriteLn(GameRecord);
+                       FindValidMoves(NewSpot,Moves,DoubleJump);
+                       If DoubleJump then
+                       Begin
+                         CurSelected:=NewSpot;
+                         Selections[CurSelected]:=SelectedColour;
+                         For Pos:=0 to 3 do
+                         Begin
+                           Temp:=Moves[Pos];
+                           If Temp=$FF then Break;
+                           PutCursor(Temp And 7,Temp SHR 3,GoodMoveColour);
+                           Selections[Temp]:=GoodMoveColour;
+                         End;
+                         Break;
+                       End;
+                     End Else CurSelected:=$FF;
+                     If (NewSpot<8) and (Board[NewSpot]=Red) then
+                       Board[NewSpot]:=RedKing;
+                     If (NewSpot>55) and (Board[NewSpot]=Black) then
+                       Board[NewSpot]:=BlackKing;
+                     CurMove:=CurMove Xor 1;
+                     Inc(MoveNumber);
+                     FindMoves;
+                     WriteLn(GameRecord);
+                   End;
                  End;
                End;
              End;
-           End;
            'W':
              If (LastBlack<11) And ((Y+X) And 1=1) then
              Begin
@@ -2849,8 +2880,8 @@
        Begin
          If Buttons=1 then {Left button pressed}
          Asm
-	   Mov AH,05h
-	   Mov CX,0020h {Space}
+           Mov AH,05h
+           Mov CX,0020h {Space}
            Int 16h {Store it in the keyboard buffer}
          End;
          If Buttons=2 then {Right button pressed}
@@ -2862,7 +2893,7 @@
            If XAxis<Pi/16 then XAxis:=Pi/16;
            If XAxis>Pi/2 then XAxis:=Pi/2;
            Quadrant:=Round(YAxis/(Pi/4)) and 7;
-           PutMouse(OldMouseX,OldMouseY);
+           PutMouse(160,100); {Just put it in the middle after this.}
            MouseX:=OldMouseX; {Stupeed procedure.}
            MouseY:=OldMouseY;
            Redraw:=True;

@@ -1,0 +1,85 @@
+*** About ScuzzBall ***
+
+ScuzzBall is a DOS game that Nathan Banks started during a Grade 11 maths
+class when it got too boring.  He wanted to play JezzBall on an old Toshiba
+T1000 XT laptop.  He contintued to work on the game over the following years
+before abandoning it when the market for DOS shareware games disappeared. At
+the end of the project, Nathan had written about 25000 lines of Pascal and
+Assembler code for the three projects.
+
+The game expanded from ScuzzBall into a Nibbles and Checkers game which are
+included as part of this package.
+
+
+*** ScuzzBall Videos ***
+
+  You can check out http://youtube.com/user/scuzzbal/videos
+
+
+*** Installation ***
+
+The following are the instructions for installing scuzzball on a Debian/Ubuntu
+system. The Dosbox commands should work in any operating systems.
+
+
+1. Install DOSBOX:
+
+    sudo apt-get install dosbox
+
+2. Create a directory for your dos programs.
+
+    DOS=~/dos
+    mkdir $DOS
+
+3. Download the self-extracting executables for scuzzball.
+
+    You may download the executables, or install from source:
+    For the executables:
+
+        cd $DOS
+        wget http://bnathan.com/scuzzball/scuzz.exe
+        wget http://bnathan.com/scuzzball/nibbles.exe
+        wget http://bnathan.com/scuzzball/checkers.exe
+
+    To compile, you will need a copy of Borland Turbo Pascal 7.0 for DOS.
+    If you google "Turbo Pascal", you may come across a copy.
+    After getting it, you will want to clone the ScuzzBall repository:
+        cd $DOS
+        git clone https://github.com/nbanks/scuzzball.git scuzzbal
+
+4. Start dosbox, mount your directory, and extract the files.
+
+    First, start dosbox and mount your dos directory
+        dosbox
+        mount c ~/dos
+        c:
+
+    Hint: Press control-F12 a few times to increase the processor speed slightly.
+    Hint: Press Alt-Enter to enter full-screen mode.
+
+    To Install from executables, use:
+        scuzz.exe
+        nibbles.exe
+        checkers.exe
+
+    To Install from source, first add turbo pascal to the path:
+        set PATH=%PATH%;\TP\BIN
+
+    Next compile each of the programs:
+        cd scuzzbal\scuzzbal
+        tpc -B scuzzbal
+        cd ..\checkers
+        tpc -B checkers
+        cd ..\nibbles
+        tpc -B nibbles
+
+5. Play the games! I find ScuzzBall and nibbles most fun.
+
+        dir
+        cd Scuzzbal
+        scuzzbal
+        cd \nibbles
+        nibbles
+        cd \checkers
+        checkers
+    (For nibbles, I usually use a speed of 256.)
